@@ -1,11 +1,11 @@
-use anyhow::{Result, Context};
-use evdev::{Device, InputEvent, EventType, AbsoluteAxisType};
+use anyhow::{Context, Result};
+use evdev::{AbsoluteAxisType, Device, EventType, InputEvent};
+use lazy_static::lazy_static;
 use log::{debug, info, warn};
-use std::path::Path;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
 use tokio::time::{sleep, Duration};
-use lazy_static::lazy_static;
 
 lazy_static! {
     /// Static variables to track touch state across function calls
@@ -43,67 +43,72 @@ pub enum MouseEvent {
 impl MagicMouseDevice {
     /// Create a new Magic Mouse device instance
     pub fn new<P: AsRef<Path>>(device_path: P) -> Result<Self> {
-        let device = Device::open(device_path.as_ref())
-            .with_context(|| format!("Failed to open device: {}", device_path.as_ref().display()))?;
-        
+        let device = Device::open(device_path.as_ref()).with_context(|| {
+            format!("Failed to open device: {}", device_path.as_ref().display())
+        })?;
+
         // Verify this is likely a Magic Mouse by checking capabilities
         let name = device.name().unwrap_or("Unknown");
         info!("Opened device: {}", name);
-        
+
         // Check for multi-touch capabilities
         if !device.supported_absolute_axes().map_or(false, |axes| {
-            axes.contains(AbsoluteAxisType::ABS_MT_POSITION_X) &&
-            axes.contains(AbsoluteAxisType::ABS_MT_POSITION_Y) &&
-            axes.contains(AbsoluteAxisType::ABS_MT_TRACKING_ID)
+            axes.contains(AbsoluteAxisType::ABS_MT_POSITION_X)
+                && axes.contains(AbsoluteAxisType::ABS_MT_POSITION_Y)
+                && axes.contains(AbsoluteAxisType::ABS_MT_TRACKING_ID)
         }) {
             warn!("Device may not be a Magic Mouse - missing expected multi-touch capabilities");
         }
-        
+
         Ok(Self { device })
     }
-    
+
     /// Read the next input event from the device
     pub async fn read_event(&mut self) -> Result<MouseEvent> {
         loop {
-            let events = self.device.fetch_events()
+            let events = self
+                .device
+                .fetch_events()
                 .context("Failed to fetch events from device")?;
-            
+
             for event in events {
                 debug!("Raw event: {:?}", event);
-                
+
                 if let Some(mouse_event) = Self::process_raw_event(event)? {
                     return Ok(mouse_event);
                 }
             }
-            
+
             // Small delay to prevent busy waiting
             sleep(Duration::from_millis(1)).await;
         }
     }
-    
+
     /// Process a raw input event into a mouse event
-    fn process_raw_event(
-        event: InputEvent,
-    ) -> Result<Option<MouseEvent>> {
+    fn process_raw_event(event: InputEvent) -> Result<Option<MouseEvent>> {
         let mut current_slot = CURRENT_SLOT.lock().unwrap();
         let mut touch_points = TOUCH_POINTS.lock().unwrap();
-        
+
         match event.event_type() {
             EventType::ABSOLUTE => {
                 match event.code() {
                     // Multi-touch slot selection
-                    47 => { // ABS_MT_SLOT
+                    47 => {
+                        // ABS_MT_SLOT
                         *current_slot = event.value();
                         debug!("Switched to slot: {}", *current_slot);
                     }
-                    
+
                     // Touch tracking ID (touch start/end)
-                    57 => { // ABS_MT_TRACKING_ID
+                    57 => {
+                        // ABS_MT_TRACKING_ID
                         let tracking_id = event.value();
                         if tracking_id == -1 {
                             // Touch end
                             if let Some(point) = touch_points.remove(&*current_slot) {
-                                return Ok(Some(MouseEvent::TouchEnd { tracking_id: point.tracking_id }));
+                                return Ok(Some(MouseEvent::TouchEnd {
+                                    tracking_id: point.tracking_id,
+                                }));
                             }
                         } else {
                             // Touch start - create new touch point
@@ -120,44 +125,53 @@ impl MagicMouseDevice {
                             return Ok(Some(MouseEvent::TouchStart { point }));
                         }
                     }
-                    
+
                     // Position and touch data
-                    53 => { // ABS_MT_POSITION_X
+                    53 => {
+                        // ABS_MT_POSITION_X
                         if let Some(point) = touch_points.get_mut(&*current_slot) {
                             point.x = event.value();
-                            return Ok(Some(MouseEvent::TouchMove { point: point.clone() }));
+                            return Ok(Some(MouseEvent::TouchMove {
+                                point: point.clone(),
+                            }));
                         }
                     }
-                    
-                    54 => { // ABS_MT_POSITION_Y
+
+                    54 => {
+                        // ABS_MT_POSITION_Y
                         if let Some(point) = touch_points.get_mut(&*current_slot) {
                             point.y = event.value();
-                            return Ok(Some(MouseEvent::TouchMove { point: point.clone() }));
+                            return Ok(Some(MouseEvent::TouchMove {
+                                point: point.clone(),
+                            }));
                         }
                     }
-                    
-                    48 => { // ABS_MT_TOUCH_MAJOR
+
+                    48 => {
+                        // ABS_MT_TOUCH_MAJOR
                         if let Some(point) = touch_points.get_mut(&*current_slot) {
                             point.touch_major = event.value();
                         }
                     }
-                    
-                    49 => { // ABS_MT_TOUCH_MINOR
+
+                    49 => {
+                        // ABS_MT_TOUCH_MINOR
                         if let Some(point) = touch_points.get_mut(&*current_slot) {
                             point.touch_minor = event.value();
                         }
                     }
-                    
-                    52 => { // ABS_MT_ORIENTATION
+
+                    52 => {
+                        // ABS_MT_ORIENTATION
                         if let Some(point) = touch_points.get_mut(&*current_slot) {
                             point.orientation = event.value();
                         }
                     }
-                    
+
                     _ => {}
                 }
             }
-            
+
             EventType::KEY => {
                 // Mouse button events
                 return Ok(Some(MouseEvent::Button {
@@ -165,29 +179,31 @@ impl MagicMouseDevice {
                     pressed: event.value() != 0,
                 }));
             }
-            
+
             EventType::RELATIVE => {
                 // Mouse movement events
                 match event.code() {
-                    0 => { // REL_X
-                        return Ok(Some(MouseEvent::Movement { 
-                            dx: event.value(), 
-                            dy: 0 
+                    0 => {
+                        // REL_X
+                        return Ok(Some(MouseEvent::Movement {
+                            dx: event.value(),
+                            dy: 0,
                         }));
                     }
-                    1 => { // REL_Y
-                        return Ok(Some(MouseEvent::Movement { 
-                            dx: 0, 
-                            dy: event.value() 
+                    1 => {
+                        // REL_Y
+                        return Ok(Some(MouseEvent::Movement {
+                            dx: 0,
+                            dy: event.value(),
                         }));
                     }
                     _ => {}
                 }
             }
-            
+
             _ => {}
         }
-        
+
         Ok(None)
     }
 }
@@ -195,7 +211,7 @@ impl MagicMouseDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evdev::{InputEvent, EventType};
+    use evdev::{EventType, InputEvent};
 
     #[test]
     fn test_touchpoint_struct() {
@@ -231,7 +247,10 @@ mod tests {
         let e1 = MouseEvent::TouchStart { point: tp.clone() };
         let e2 = MouseEvent::TouchMove { point: tp.clone() };
         let e3 = MouseEvent::TouchEnd { tracking_id: 1 };
-        let e4 = MouseEvent::Button { button: 272, pressed: true };
+        let e4 = MouseEvent::Button {
+            button: 272,
+            pressed: true,
+        };
         let e5 = MouseEvent::Movement { dx: 5, dy: -3 };
         match e1 {
             MouseEvent::TouchStart { point } => assert_eq!(point.x, 10),
@@ -249,14 +268,14 @@ mod tests {
             MouseEvent::Button { button, pressed } => {
                 assert_eq!(button, 272);
                 assert!(pressed);
-            },
+            }
             _ => panic!("Wrong variant"),
         }
         match e5 {
             MouseEvent::Movement { dx, dy } => {
                 assert_eq!(dx, 5);
                 assert_eq!(dy, -3);
-            },
+            }
             _ => panic!("Wrong variant"),
         }
     }
@@ -273,7 +292,7 @@ mod tests {
             Some(MouseEvent::TouchStart { point }) => {
                 assert_eq!(point.tracking_id, 123);
                 assert_eq!(point.slot, 1);
-            },
+            }
             _ => panic!("Expected TouchStart event"),
         }
         // Set up ABS_MT_TRACKING_ID event (code 57, value == -1)
@@ -282,7 +301,7 @@ mod tests {
         match evt {
             Some(MouseEvent::TouchEnd { tracking_id }) => {
                 assert_eq!(tracking_id, 123);
-            },
+            }
             _ => panic!("Expected TouchEnd event"),
         }
     }
@@ -290,8 +309,10 @@ mod tests {
     #[test]
     fn test_process_raw_event_position() {
         // Set up slot and tracking id
-        let _ = MagicMouseDevice::process_raw_event(InputEvent::new(EventType::ABSOLUTE, 47, 2)).unwrap();
-        let _ = MagicMouseDevice::process_raw_event(InputEvent::new(EventType::ABSOLUTE, 57, 99)).unwrap();
+        let _ = MagicMouseDevice::process_raw_event(InputEvent::new(EventType::ABSOLUTE, 47, 2))
+            .unwrap();
+        let _ = MagicMouseDevice::process_raw_event(InputEvent::new(EventType::ABSOLUTE, 57, 99))
+            .unwrap();
         // Set up ABS_MT_POSITION_X event (code 53)
         let x_event = InputEvent::new(EventType::ABSOLUTE, 53, 321);
         let evt = MagicMouseDevice::process_raw_event(x_event).unwrap();
@@ -299,7 +320,7 @@ mod tests {
             Some(MouseEvent::TouchMove { point }) => {
                 assert_eq!(point.x, 321);
                 assert_eq!(point.slot, 2);
-            },
+            }
             _ => panic!("Expected TouchMove event for X"),
         }
         // Set up ABS_MT_POSITION_Y event (code 54)
@@ -309,7 +330,7 @@ mod tests {
             Some(MouseEvent::TouchMove { point }) => {
                 assert_eq!(point.y, 654);
                 assert_eq!(point.slot, 2);
-            },
+            }
             _ => panic!("Expected TouchMove event for Y"),
         }
     }
@@ -323,7 +344,7 @@ mod tests {
             Some(MouseEvent::Button { button, pressed }) => {
                 assert_eq!(button, 272);
                 assert!(pressed);
-            },
+            }
             _ => panic!("Expected Button event"),
         }
         // Movement event REL_X
@@ -333,7 +354,7 @@ mod tests {
             Some(MouseEvent::Movement { dx, dy }) => {
                 assert_eq!(dx, 7);
                 assert_eq!(dy, 0);
-            },
+            }
             _ => panic!("Expected Movement event for REL_X"),
         }
         // Movement event REL_Y
@@ -343,7 +364,7 @@ mod tests {
             Some(MouseEvent::Movement { dx, dy }) => {
                 assert_eq!(dx, 0);
                 assert_eq!(dy, -4);
-            },
+            }
             _ => panic!("Expected Movement event for REL_Y"),
         }
     }
