@@ -33,6 +33,18 @@ options hid-magicmouse emulate_3button=0 emulate_scroll_wheel=1 scroll_speed=32 
 it can be recognized by the `evtest /dev/input/event26`, but not recognized by the `libinput` .
 
 ```bash
+  Event type 0 (EV_SYN)
+  Event type 1 (EV_KEY)
+    Event code 256 (BTN_0)
+    Event code 272 (BTN_LEFT)
+    Event code 273 (BTN_RIGHT)
+  Event type 2 (EV_REL)
+    Event code 0 (REL_X)
+    Event code 1 (REL_Y)
+    Event code 6 (REL_HWHEEL)
+    Event code 8 (REL_WHEEL)
+    Event code 11 (REL_WHEEL_HI_RES)
+    Event code 12 (REL_HWHEEL_HI_RES)
  Event type 3 (EV_ABS)
     Event code 47 (ABS_MT_SLOT)
       Value     10
