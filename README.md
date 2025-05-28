@@ -123,6 +123,34 @@ sudo evtest
 
 Look for a device with "Magic Mouse" in the name and note its event number.
 
+### Finding Your Device Event Number
+
+To find out which `/dev/input/eventX` device corresponds to your Magic Mouse:
+
+1. Run the following command:
+
+```fish
+sudo evtest
+```
+
+2. You will see a list of input devices. Look for one with "Magic Mouse" in the name. Note the event number (e.g., `/dev/input/event26`).
+
+3. Select that number when prompted, or use it directly:
+
+```fish
+evtest /dev/input/event26
+```
+
+4. Move or tap your Magic Mouse. If you see events appear, you have found the correct device.
+
+If you want to check without root, add your user to the `input` group and log out/in:
+
+```fish
+sudo usermod -aG input (whoami)
+```
+
+Then use `evtest` without `sudo` after re-logging in.
+
 ### Running as a Service
 
 To run the gesture recognition as a system service, create a systemd service file:
