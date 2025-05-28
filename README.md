@@ -5,6 +5,7 @@ A Rust-based gesture recognition tool for Apple Magic Mouse on Linux, specifical
 ## Features
 
 - **Multi-touch gesture recognition**: Detects swipes, scrolls, taps, and pinch gestures
+- **Two-finger tap recognition**: Advanced two-finger tap detection based on Linux Multi-Touch Protocol
 - **Configurable actions**: Execute custom commands for each gesture
 - **Direct input handling**: Works with raw input events from evdev
 - **Async processing**: Non-blocking event processing using Tokio

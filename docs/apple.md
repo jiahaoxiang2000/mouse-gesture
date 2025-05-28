@@ -32,7 +32,7 @@ options hid-magicmouse emulate_3button=0 emulate_scroll_wheel=1 scroll_speed=32 
 
 it can be recognized by the `evtest /dev/input/event26`, but not recognized by the `libinput` .
 
-> The detail event information can be checked by on [multi-touch-protocol](www.kernel.org/doc/Documentation/input/multi-touch-protocol.txt) on linux kernel documentation.
+> The detail event information can be checked by on [multi-touch-protocol](https://www.kernel.org/doc/Documentation/input/multi-touch-protocol.txt) on linux kernel documentation.
 
 ```bash
   Event type 0 (EV_SYN)
