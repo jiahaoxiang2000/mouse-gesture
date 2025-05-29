@@ -103,11 +103,6 @@ impl GestureRecognizer {
 
     /// Detect two-finger tap based on Linux Multi-Touch Protocol requirements
     fn is_two_finger_tap(&self, contact1: &TouchContact, contact2: &TouchContact) -> bool {
-        // Both contacts must be inactive (completed gestures)
-        if contact1.is_active || contact2.is_active {
-            return false;
-        }
-
         // Short duration requirement
         let max_tap_duration = Duration::from_millis(self.two_finger_tap_timeout_ms);
         if contact1.contact_duration() > max_tap_duration
