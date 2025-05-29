@@ -6,7 +6,7 @@
   },
   "gesture": {
     "scroll_threshold": 50.0,
-    "swipe_threshold": 700.0,
+    "swipe_threshold": 500.0,
     "pinch_threshold": 0.1,
     "tap_timeout_ms": 300,
     "debounce_ms": 100,
@@ -16,15 +16,15 @@
     "single_finger_tap_movement_threshold": 50.0
   },
   "actions": {
-    "swipe_down_2finger": "xdotool key ctrl+w",
     "scroll_horizontal": "scroll_horizontal",
-    "swipe_left_2finger": "xdotool key alt+Right",
-    "swipe_right_2finger": "xdotool key alt+Left",
+    "swipe_up_2finger": "wtype -M ctrl -k t -m ctrl",
+    "swipe_down_2finger": "wtype -M ctrl -k w -m ctrl",
+    "swipe_left_2finger": "wtype -M alt -k Right -m alt",
+    "swipe_right_2finger": "wtype -M alt -k Left -m alt",
     "scroll_vertical": "scroll_vertical",
     "tap_2finger": "right_click",
-    "swipe_up_2finger": "xdotool key ctrl+t",
     "tap_1finger": "click",
-    "pinch_in": "xdotool key ctrl+minus",
-    "pinch_out": "xdotool key ctrl+plus"
+    "pinch_in": "wtype -M ctrl -k minus",
+    "pinch_out": "wtype -M ctrl -k plus"
   }
 }
