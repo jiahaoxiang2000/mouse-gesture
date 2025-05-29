@@ -1,34 +1,21 @@
-use std::collections::VecDeque;
+use crate::multitouch::{MultiTouchEvent, TouchContact};
 use std::time::{Duration, Instant};
 
-use crate::multitouch::{MultiTouchEvent, TouchContact};
-
+/// Gesture recognizer focused on multi-touch tap and swipe detection
 pub struct GestureRecognizer {
     swipe_threshold: f64,
     pinch_threshold: f64,
-    scroll_threshold: f64,
-    gesture_history: VecDeque<GestureEvent>,
-    max_history_size: usize,
-}
-
-#[derive(Debug, Clone)]
-struct GestureEvent {
-    timestamp: Instant,
-    event_type: String,
-    contacts: Vec<TouchContact>,
 }
 
 impl GestureRecognizer {
-    pub fn new(swipe_threshold: f64, pinch_threshold: f64, scroll_threshold: f64) -> Self {
+    pub fn new(swipe_threshold: f64, pinch_threshold: f64, _scroll_threshold: f64) -> Self {
         Self {
             swipe_threshold,
             pinch_threshold,
-            scroll_threshold,
-            gesture_history: VecDeque::new(),
-            max_history_size: 100,
         }
     }
 
+    /// Analyze contacts and detect gestures
     pub fn analyze_gesture(&mut self, contacts: &[TouchContact]) -> Option<MultiTouchEvent> {
         match contacts.len() {
             1 => self.analyze_single_finger(contacts),
@@ -37,48 +24,33 @@ impl GestureRecognizer {
         }
     }
 
+    /// Detect single finger gestures (primarily taps)
     fn analyze_single_finger(&self, contacts: &[TouchContact]) -> Option<MultiTouchEvent> {
         let contact = &contacts[0];
 
-        // Check for single tap
-        let duration = contact.contact_duration();
-        if duration < Duration::from_millis(300) && !contact.is_active {
+        // Check for single tap - short duration and contact is no longer active
+        if !contact.is_active && contact.is_tap(300, 50.0) {
             return Some(MultiTouchEvent::SingleFingerTap {
                 finger: contact.clone(),
-                duration_ms: duration.as_millis() as u64,
+                duration_ms: contact.contact_duration().as_millis() as u64,
             });
         }
 
         None
     }
 
+    /// Detect two finger gestures (taps, swipes, pinch)
     fn analyze_two_finger(&self, contacts: &[TouchContact]) -> Option<MultiTouchEvent> {
         let contact1 = &contacts[0];
         let contact2 = &contacts[1];
 
-        // Calculate center point
-        let center_x = (contact1.x + contact2.x) as f64 / 2.0;
-        let center_y = (contact1.y + contact2.y) as f64 / 2.0;
-
-        // Calculate distance between fingers
-        let distance = contact1.distance_to(contact2);
-
-        // Check for two-finger tap
+        // Check for two-finger tap first (highest priority)
         if self.is_two_finger_tap(contact1, contact2) {
             let max_duration = contact1.contact_duration().max(contact2.contact_duration());
             return Some(MultiTouchEvent::TwoFingerTap {
                 finger1: contact1.clone(),
                 finger2: contact2.clone(),
                 duration_ms: max_duration.as_millis() as u64,
-            });
-        }
-
-        // Check for pinch gesture
-        if let Some(scale_factor) = self.detect_pinch(contact1, contact2) {
-            return Some(MultiTouchEvent::Pinch {
-                center_x,
-                center_y,
-                scale_factor,
             });
         }
 
@@ -92,36 +64,42 @@ impl GestureRecognizer {
             });
         }
 
-        // Check for scroll gesture
-        if let Some((delta_x, delta_y)) = self.detect_scroll(contact1, contact2) {
-            return Some(MultiTouchEvent::Scroll { delta_x, delta_y });
+        // Check for pinch gesture
+        if let Some(scale_factor) = self.detect_pinch(contact1, contact2) {
+            let center_x = (contact1.x + contact2.x) as f64 / 2.0;
+            let center_y = (contact1.y + contact2.y) as f64 / 2.0;
+            return Some(MultiTouchEvent::Pinch {
+                center_x,
+                center_y,
+                scale_factor,
+            });
         }
 
         None
     }
 
+    /// Detect two-finger tap based on Linux Multi-Touch Protocol requirements
     fn is_two_finger_tap(&self, contact1: &TouchContact, contact2: &TouchContact) -> bool {
-        let duration1 = contact1.contact_duration();
-        let duration2 = contact2.contact_duration();
-        let max_tap_duration = Duration::from_millis(250);
-
-        // Both contacts should be short-lived
-        if duration1 > max_tap_duration || duration2 > max_tap_duration {
+        // Both contacts must be inactive (completed gestures)
+        if contact1.is_active || contact2.is_active {
             return false;
         }
 
-        // Contacts should be close together
+        // Short duration requirement
+        let max_tap_duration = Duration::from_millis(250);
+        if contact1.contact_duration() > max_tap_duration
+            || contact2.contact_duration() > max_tap_duration
+        {
+            return false;
+        }
+
+        // Close proximity requirement
         let distance = contact1.distance_to(contact2);
         if distance > 100.0 {
             return false;
         }
 
-        // Both contacts should have sufficient pressure
-        if contact1.pressure < 50.0 || contact2.pressure < 50.0 {
-            return false;
-        }
-
-        // Contacts should start around the same time
+        // Simultaneous start requirement
         let time_diff = if contact1.first_contact_time > contact2.first_contact_time {
             contact1
                 .first_contact_time
@@ -135,45 +113,34 @@ impl GestureRecognizer {
         time_diff < Duration::from_millis(100)
     }
 
-    fn detect_pinch(&self, contact1: &TouchContact, contact2: &TouchContact) -> Option<f64> {
-        // For now, return None - would need gesture history to implement properly
-        // This would require tracking the initial distance and comparing to current distance
-        None
-    }
-
+    /// Detect swipe gestures based on movement delta
     fn detect_swipe(&self, contact1: &TouchContact, contact2: &TouchContact) -> Option<(f64, f64)> {
-        // For now, return None - would need gesture history to implement properly
-        // This would require tracking movement over time
-        None
-    }
+        // Only detect swipes on inactive contacts (completed gestures)
+        if contact1.is_active || contact2.is_active {
+            return None;
+        }
 
-    fn detect_scroll(
-        &self,
-        contact1: &TouchContact,
-        contact2: &TouchContact,
-    ) -> Option<(f64, f64)> {
-        // For now, return None - would need gesture history to implement properly
-        // This would require tracking small movements over time
-        None
-    }
+        let (dx1, dy1) = contact1.movement_delta();
+        let (dx2, dy2) = contact2.movement_delta();
 
-    fn add_to_history(&mut self, event_type: String, contacts: Vec<TouchContact>) {
-        let event = GestureEvent {
-            timestamp: Instant::now(),
-            event_type,
-            contacts,
-        };
+        // Average movement of both fingers
+        let avg_dx = (dx1 + dx2) / 2.0;
+        let avg_dy = (dy1 + dy2) / 2.0;
 
-        self.gesture_history.push_back(event);
+        let movement_magnitude = (avg_dx * avg_dx + avg_dy * avg_dy).sqrt();
 
-        // Keep history size manageable
-        while self.gesture_history.len() > self.max_history_size {
-            self.gesture_history.pop_front();
+        if movement_magnitude > self.swipe_threshold {
+            Some((avg_dx, avg_dy))
+        } else {
+            None
         }
     }
 
-    pub fn clear_history(&mut self) {
-        self.gesture_history.clear();
+    /// Detect pinch gestures (placeholder for future implementation)
+    fn detect_pinch(&self, _contact1: &TouchContact, _contact2: &TouchContact) -> Option<f64> {
+        // Pinch detection requires tracking distance changes over time
+        // This would need gesture history to implement properly
+        None
     }
 }
 
@@ -188,28 +155,30 @@ mod tests {
         // Create two close contacts with short duration
         let contact1 = TouchContact {
             id: 1,
+            slot: 0,
             x: 100,
             y: 100,
             touch_major: 100,
             touch_minor: 100,
             orientation: 0,
-            pressure: 75.0,
             first_contact_time: Instant::now(),
             last_update_time: Instant::now(),
             is_active: false,
+            position_history: vec![(100, 100, Instant::now())],
         };
 
         let contact2 = TouchContact {
             id: 2,
+            slot: 1,
             x: 120,
             y: 110,
             touch_major: 90,
             touch_minor: 90,
             orientation: 0,
-            pressure: 80.0,
             first_contact_time: Instant::now(),
             last_update_time: Instant::now(),
             is_active: false,
+            position_history: vec![(120, 110, Instant::now())],
         };
 
         let contacts = vec![contact1, contact2];

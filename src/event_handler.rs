@@ -18,23 +18,23 @@ impl EventHandler {
     pub async fn handle_multitouch_event(&self, event: MultiTouchEvent) -> Result<()> {
         match event {
             MultiTouchEvent::TwoFingerTap {
-                finger1,
-                finger2,
+                finger1: _,
+                finger2: _,
                 duration_ms,
             } => {
                 info!("Two-finger tap detected ({}ms)", duration_ms);
                 self.execute_action("tap_2finger").await?;
             }
             MultiTouchEvent::SingleFingerTap {
-                finger,
+                finger: _,
                 duration_ms,
             } => {
                 info!("Single-finger tap detected ({}ms)", duration_ms);
                 self.execute_action("tap_1finger").await?;
             }
             MultiTouchEvent::TwoFingerSwipe {
-                finger1,
-                finger2,
+                finger1: _,
+                finger2: _,
                 delta_x,
                 delta_y,
             } => {
@@ -43,16 +43,9 @@ impl EventHandler {
                 self.execute_action(&format!("swipe_{}_2finger", direction))
                     .await?;
             }
-            MultiTouchEvent::Scroll { delta_x, delta_y } => {
-                if delta_y.abs() > delta_x.abs() {
-                    self.execute_scroll("vertical", delta_y).await?;
-                } else {
-                    self.execute_scroll("horizontal", delta_x).await?;
-                }
-            }
             MultiTouchEvent::Pinch {
-                center_x,
-                center_y,
+                center_x: _,
+                center_y: _,
                 scale_factor,
             } => {
                 let action = if scale_factor > 1.0 {
@@ -71,8 +64,8 @@ impl EventHandler {
             }
             MultiTouchEvent::ContactUpdate { contact } => {
                 debug!(
-                    "Contact updated: id={}, pos=({}, {}), pressure={:.2}",
-                    contact.id, contact.x, contact.y, contact.pressure
+                    "Contact updated: id={}, pos=({}, {})",
+                    contact.id, contact.x, contact.y
                 );
             }
             MultiTouchEvent::ContactEnd { contact } => {
@@ -102,25 +95,6 @@ impl EventHandler {
         Ok(())
     }
 
-    async fn execute_scroll(&self, direction: &str, delta: f64) -> Result<()> {
-        let action_name = format!("scroll_{}", direction);
-
-        if let Some(command) = self.config.actions.get(&action_name) {
-            if command == &action_name {
-                // Built-in scroll handling
-                self.simulate_scroll(direction, delta).await?;
-            } else {
-                // Custom command
-                self.execute_shell_command(command).await?;
-            }
-        } else {
-            // Default scroll behavior
-            self.simulate_scroll(direction, delta).await?;
-        }
-
-        Ok(())
-    }
-
     async fn simulate_click(&self, button: u8) -> Result<()> {
         debug!("Simulating mouse click: button {}", button);
 
@@ -135,50 +109,6 @@ impl EventHandler {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             warn!("xdotool click failed: {}", stderr);
-        }
-
-        Ok(())
-    }
-
-    async fn simulate_scroll(&self, direction: &str, delta: f64) -> Result<()> {
-        debug!("Simulating scroll: {} delta={:.2}", direction, delta);
-
-        let (button, steps) = match direction {
-            "vertical" => {
-                if delta > 0.0 {
-                    ("4", (delta / 50.0).ceil() as i32) // Scroll up
-                } else {
-                    ("5", (-delta / 50.0).ceil() as i32) // Scroll down
-                }
-            }
-            "horizontal" => {
-                if delta > 0.0 {
-                    ("6", (delta / 50.0).ceil() as i32) // Scroll right
-                } else {
-                    ("7", (-delta / 50.0).ceil() as i32) // Scroll left
-                }
-            }
-            _ => return Ok(()),
-        };
-
-        for _ in 0..steps.min(10) {
-            // Limit to 10 steps to prevent spam
-            let output = Command::new("xdotool")
-                .args(&["click", button])
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .output()
-                .await
-                .context("Failed to execute xdotool scroll")?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                warn!("xdotool scroll failed: {}", stderr);
-                break;
-            }
-
-            // Small delay between scroll steps
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
 
         Ok(())

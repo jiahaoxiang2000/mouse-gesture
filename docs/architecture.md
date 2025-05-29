@@ -37,8 +37,14 @@ The Magic Mouse Gesture Recognition system is a Rust-based application that prov
 
 ### 1. Input Processing Pipeline
 
-```
-Raw evdev Events → MultiTouchProcessor → TouchContact Updates → GestureRecognizer → MultiTouchEvent → EventHandler → System Actions
+```mermaid
+graph LR
+    A[Raw evdev Events] --> B[MultiTouchProcessor]
+    B --> C[TouchContact Updates]
+    C --> D[GestureRecognizer]
+    D --> E[MultiTouchEvent]
+    E --> F[EventHandler]
+    F --> G[System Actions]
 ```
 
 ### 2. Event Processing Sequence
