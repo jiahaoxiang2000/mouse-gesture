@@ -6,7 +6,7 @@
   },
   "gesture": {
     "scroll_threshold": 50.0,
-    "swipe_threshold": 500.0,
+    "swipe_threshold": 300.0,
     "pinch_threshold": 0.7,
     "tap_timeout_ms": 300,
     "debounce_ms": 100,
@@ -17,10 +17,10 @@
   },
   "actions": {
     "scroll_horizontal": "scroll_horizontal",
-    "swipe_up_2finger": "wtype -M ctrl -k t -m ctrl",
-    "swipe_down_2finger": "wtype -M ctrl -k w -m ctrl",
-    "swipe_left_2finger": "wtype -M alt -k Right -m alt",
-    "swipe_right_2finger": "wtype -M alt -k Left -m alt",
+    "swipe_up_2finger": "hyprctl dispatch sendshortcut CTRL, t, ",
+    "swipe_down_2finger": "hyprctl dispatch sendshortcut CTRL, w, ",
+    "swipe_left_2finger": "hyprctl dispatch sendshortcut ALT, Right, ",
+    "swipe_right_2finger": "hyprctl dispatch sendshortcut ALT, Left, ",
     "scroll_vertical": "scroll_vertical",
     "tap_1finger": "click",
     "tap_2finger": "hyprctl -q keyword cursor:zoom_factor 1",
