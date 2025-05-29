@@ -7,11 +7,11 @@
   "gesture": {
     "scroll_threshold": 50.0,
     "swipe_threshold": 500.0,
-    "pinch_threshold": 0.1,
+    "pinch_threshold": 0.7,
     "tap_timeout_ms": 300,
     "debounce_ms": 100,
-    "two_finger_tap_timeout_ms": 100,
-    "two_finger_tap_distance_threshold": 600.0,
+    "two_finger_tap_timeout_ms": 250,
+    "two_finger_tap_distance_threshold": 800.0,
     "contact_pressure_threshold": 50.0,
     "single_finger_tap_movement_threshold": 50.0
   },
@@ -22,9 +22,9 @@
     "swipe_left_2finger": "wtype -M alt -k Right -m alt",
     "swipe_right_2finger": "wtype -M alt -k Left -m alt",
     "scroll_vertical": "scroll_vertical",
-    "tap_2finger": "right_click",
     "tap_1finger": "click",
-    "pinch_in": "wtype -M ctrl -k minus",
-    "pinch_out": "wtype -M ctrl -k plus"
+    "tap_2finger": "hyprctl -q keyword cursor:zoom_factor 1",
+    "pinch_in": "hyprctl -q keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | awk '/^float.*/ {print $2 * 0.8}')",
+    "pinch_out": "hyprctl -q keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | awk '/^float.*/ {print $2 * 1.2}')"
   }
 }

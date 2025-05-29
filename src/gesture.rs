@@ -149,11 +149,53 @@ impl GestureRecognizer {
         }
     }
 
-    /// Detect pinch gestures (placeholder for future implementation)
-    fn detect_pinch(&self, _contact1: &TouchContact, _contact2: &TouchContact) -> Option<f64> {
-        // Pinch detection requires tracking distance changes over time
-        // This would need gesture history to implement properly
-        None
+    /// Detect pinch gestures based on distance changes between two contacts over time
+    fn detect_pinch(&self, contact1: &TouchContact, contact2: &TouchContact) -> Option<f64> {
+        // Need at least 3 position samples to calculate meaningful distance changes
+        if contact1.position_history.len() < 3 || contact2.position_history.len() < 3 {
+            return None;
+        }
+
+        // Calculate initial distance (using early positions, skipping the (0,0) initialization)
+        let initial_pos1 = if contact1.position_history.len() >= 3 {
+            contact1.position_history[2] // Skip the (0,0) initialization
+        } else {
+            contact1.position_history[1]
+        };
+
+        let initial_pos2 = if contact2.position_history.len() >= 3 {
+            contact2.position_history[2] // Skip the (0,0) initialization
+        } else {
+            contact2.position_history[1]
+        };
+
+        let initial_distance = {
+            let dx = (initial_pos1.0 - initial_pos2.0) as f64;
+            let dy = (initial_pos1.1 - initial_pos2.1) as f64;
+            (dx * dx + dy * dy).sqrt()
+        };
+
+        // Calculate current distance
+        let current_distance = contact1.distance_to(contact2);
+
+        // Avoid division by zero
+        if initial_distance < 1.0 {
+            return None;
+        }
+
+        // Calculate scale factor (ratio of current to initial distance)
+        let scale_factor = current_distance / initial_distance;
+
+        // Check if the scale change is significant enough to be considered a pinch
+        // Scale factor < 1.0 means pinch in (zoom out)
+        // Scale factor > 1.0 means pinch out (zoom in)
+        let scale_change = (scale_factor - 1.0).abs();
+
+        if scale_change > self.pinch_threshold {
+            Some(scale_factor)
+        } else {
+            None
+        }
     }
 }
 
@@ -208,6 +250,75 @@ mod tests {
             // Test passed
         } else {
             panic!("Expected two-finger tap detection");
+        }
+    }
+
+    #[test]
+    fn test_pinch_detection() {
+        let mut recognizer = GestureRecognizer::new(
+            100.0, // swipe_threshold
+            0.2,   // pinch_threshold (20% change)
+            50.0,  // scroll_threshold
+            300,   // tap_timeout_ms
+            50.0,  // single_finger_tap_movement_threshold
+            250,   // two_finger_tap_timeout_ms
+            100.0, // two_finger_tap_distance_threshold
+        );
+
+        let now = Instant::now();
+
+        // Create two contacts that start close and move apart (pinch out)
+        let contact1 = TouchContact {
+            id: 1,
+            slot: 0,
+            x: 150, // Moved further apart
+            y: 150,
+            touch_major: 100,
+            touch_minor: 100,
+            orientation: 0,
+            first_contact_time: now,
+            last_update_time: now,
+            is_active: true,
+            position_history: vec![
+                (0, 0, now),     // Initial (0,0) position
+                (100, 100, now), // First real position
+                (110, 110, now), // Early position
+                (150, 150, now), // Final position (moved apart)
+            ],
+        };
+
+        let contact2 = TouchContact {
+            id: 2,
+            slot: 1,
+            x: 50, // Moved in opposite direction
+            y: 50,
+            touch_major: 90,
+            touch_minor: 90,
+            orientation: 0,
+            first_contact_time: now,
+            last_update_time: now,
+            is_active: true,
+            position_history: vec![
+                (0, 0, now),     // Initial (0,0) position
+                (100, 100, now), // First real position (same as contact1)
+                (90, 90, now),   // Early position
+                (50, 50, now),   // Final position (moved apart)
+            ],
+        };
+
+        let contacts = vec![contact1, contact2];
+
+        if let Some(MultiTouchEvent::Pinch { scale_factor, .. }) =
+            recognizer.analyze_gesture(&contacts)
+        {
+            // Should detect pinch out (scale_factor > 1.0)
+            assert!(
+                scale_factor > 1.0,
+                "Expected pinch out with scale factor > 1.0, got {}",
+                scale_factor
+            );
+        } else {
+            panic!("Expected pinch detection");
         }
     }
 }
