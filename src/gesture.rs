@@ -46,8 +46,6 @@ impl GestureRecognizer {
     /// Detect single finger gestures (primarily taps)
     fn analyze_single_finger(&self, contacts: &[TouchContact]) -> Option<MultiTouchEvent> {
         let contact = &contacts[0];
-        debug!("Analyzing single finger contact: {:?}", contact);
-
         // Check for single tap - short duration and contact is no longer active
         if !contact.is_active
             && contact.is_tap(

@@ -81,16 +81,15 @@ impl MagicMouseDevice {
 
         // Process events
         while let Some(event) = rx.recv().await {
-            debug!("Raw event: {:?}", event);
-
-            // Process through multi-touch processor
-            if let Some(mt_events) = mt_processor.process_event(event).await {
-                for mt_event in mt_events {
-                    debug!("Multi-touch event: {:?}", mt_event);
-
-                    // Handle the multi-touch event
-                    if let Err(e) = event_handler.handle_multitouch_event(mt_event).await {
-                        warn!("Failed to handle multi-touch event: {}", e);
+            // Only process ABS_* events through multi-touch processor
+            if event.event_type() == evdev::EventType::ABSOLUTE {
+                debug!("Raw event: {:?}", event);
+                if let Some(mt_events) = mt_processor.process_event(event).await {
+                    for mt_event in mt_events {
+                        // Handle the multi-touch event
+                        if let Err(e) = event_handler.handle_multitouch_event(mt_event).await {
+                            warn!("Failed to handle multi-touch event: {}", e);
+                        }
                     }
                 }
             }

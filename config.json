@@ -12,7 +12,8 @@
     "debounce_ms": 100,
     "two_finger_tap_timeout_ms": 250,
     "two_finger_tap_distance_threshold": 100.0,
-    "contact_pressure_threshold": 50.0
+    "contact_pressure_threshold": 50.0,
+    "single_finger_tap_movement_threshold": 50.0
   },
   "actions": {
     "swipe_down_2finger": "xdotool key ctrl+w",

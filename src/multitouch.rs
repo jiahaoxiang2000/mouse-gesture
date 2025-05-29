@@ -143,9 +143,16 @@ impl TouchContact {
 
     /// Get movement delta from start to current position
     pub fn movement_delta(&self) -> (f64, f64) {
-        if let Some((start_x, start_y, _)) = self.position_history.first() {
-            ((self.x - start_x) as f64, (self.y - start_y) as f64)
+        // Skip the initial (0,0) position and use the first real position
+        // The first entry is always (0,0) from initialization, so we want the second entry if it exists
+        if self.position_history.len() >= 3 {
+            if let Some((start_x, start_y, _)) = self.position_history.get(2) {
+                ((self.x - start_x) as f64, (self.y - start_y) as f64)
+            } else {
+                (0.0, 0.0)
+            }
         } else {
+            // If we only have the initial (0,0) position, no movement yet
             (0.0, 0.0)
         }
     }
