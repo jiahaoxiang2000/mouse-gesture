@@ -98,7 +98,7 @@ impl TouchContact {
             first_contact_time: now,
             last_update_time: now,
             is_active: true,
-            position_history: Vec::new(),
+            position_history: vec![(0, 0, now)], // Start with initial position
         }
     }
 
@@ -252,12 +252,28 @@ impl MultiTouchProcessor {
                         self.completed_contacts.len()
                     );
 
+                    // Debug: print contact details
+                    for (i, contact) in self.completed_contacts.iter().enumerate() {
+                        println!("DEBUG Contact {}: active={}, position=({}, {}), history_len={}, duration={:?}", 
+                                i, contact.is_active, contact.x, contact.y, 
+                                contact.position_history.len(), contact.contact_duration());
+                        if !contact.position_history.is_empty() {
+                            println!("  First position: {:?}", contact.position_history.first());
+                            println!("  Last position: {:?}", contact.position_history.last());
+                        }
+                        println!("  Is tap: {}", contact.is_tap(300, 50.0));
+                        println!("  Movement delta: {:?}", contact.movement_delta());
+                    }
+
                     if let Some(gesture_event) = self
                         .gesture_recognizer
                         .analyze_gesture(&self.completed_contacts)
                     {
+                        println!("DEBUG: Gesture recognized: {:?}", gesture_event);
                         self.completed_contacts.clear();
                         return Some(vec![gesture_event]);
+                    } else {
+                        println!("DEBUG: No gesture recognized");
                     }
 
                     // Clear completed contacts even if no gesture was recognized
@@ -343,4 +359,111 @@ impl MultiTouchProcessor {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    fn create_test_config() -> GestureConfig {
+        GestureConfig {
+            scroll_threshold: 50.0,
+            swipe_threshold: 100.0,
+            pinch_threshold: 0.1,
+            tap_timeout_ms: 300,
+            debounce_ms: 10,
+            two_finger_tap_timeout_ms: 250,
+            two_finger_tap_distance_threshold: 100.0,
+            contact_pressure_threshold: 0.5,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_event_single_finger_tap() {
+        let config = create_test_config();
+        let mut processor = MultiTouchProcessor::new(config);
+
+        // Start new contact - slot selection
+        let slot_event = InputEvent::new(EventType::ABSOLUTE, AbsoluteAxisType::ABS_MT_SLOT.0, 0);
+        processor.process_event(slot_event).await;
+
+        // Start tracking new contact
+        let start_tracking_event = InputEvent::new(
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_MT_TRACKING_ID.0,
+            1234,
+        );
+        let events = processor.process_event(start_tracking_event).await;
+        assert!(events.is_none()); // No gesture events when starting contact
+
+        // Update position (small movement to simulate a tap)
+        let x_event = InputEvent::new(
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_MT_POSITION_X.0,
+            5,  // Small movement from (0,0)
+        );
+        processor.process_event(x_event).await;
+
+        let y_event = InputEvent::new(
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_MT_POSITION_Y.0,
+            3,  // Small movement from (0,0)
+        );
+        processor.process_event(y_event).await;
+
+        // Debug: check the state before ending contact
+        println!("Before ending contact:");
+        println!("  Active contacts: {}", processor.active_contact_count);
+        println!("  Pending contacts: {}", processor.pending_contacts.len());
+        println!(
+            "  Completed contacts: {}",
+            processor.completed_contacts.len()
+        );
+
+        // End contact - this should trigger gesture recognition immediately
+        let end_tracking_event = InputEvent::new(
+            EventType::ABSOLUTE,
+            AbsoluteAxisType::ABS_MT_TRACKING_ID.0,
+            -1,
+        );
+        let events = processor.process_event(end_tracking_event).await;
+
+        // Debug: check the state after ending contact
+        println!("After ending contact:");
+        println!("  Active contacts: {}", processor.active_contact_count);
+        println!("  Pending contacts: {}", processor.pending_contacts.len());
+        println!(
+            "  Completed contacts: {}",
+            processor.completed_contacts.len()
+        );
+        println!("  Events returned: {:?}", events);
+
+        // Check if there's a contact in completed contacts
+        if let Some(contact) = processor.completed_contacts.first() {
+            println!("Contact details:");
+            println!("  is_active: {}", contact.is_active);
+            println!("  position: ({}, {})", contact.x, contact.y);
+            println!("  position_history: {:?}", contact.position_history);
+            println!("  contact_duration: {:?}", contact.contact_duration());
+            println!("  is_tap: {}", contact.is_tap(300, 50.0));
+            println!("  movement_delta: {:?}", contact.movement_delta());
+        }
+
+        // Should get a single finger tap gesture
+        assert!(events.is_some());
+        let events = events.unwrap();
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            MultiTouchEvent::SingleFingerTap {
+                finger: _,
+                duration_ms,
+            } => {
+                assert!(*duration_ms < 300); // Should be under tap timeout
+            }
+            _ => panic!("Expected SingleFingerTap, got: {:?}", events[0]),
+        }
+
+        // Verify state is clean
+        assert_eq!(processor.active_contact_count, 0);
+        assert!(processor.completed_contacts.is_empty());
+        assert!(processor.pending_contacts.is_empty());
+    }
+}
