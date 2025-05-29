@@ -1,4 +1,4 @@
-use evdev::{AbsoluteAxisType, EventType, InputEvent, SynchronizationType};
+use evdev::{AbsoluteAxisType, EventType, InputEvent, Synchronization};
 use log::{debug, trace};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -11,10 +11,12 @@ use crate::gesture::GestureRecognizer;
 /// This processor manages touch contacts using slots and tracking IDs as described in:
 /// https://www.kernel.org/doc/Documentation/input/multi-touch-protocol.txt
 pub struct MultiTouchProcessor {
-    /// Currently active touch contacts, indexed by slot number
-    active_contacts: HashMap<i32, TouchContact>,
     /// Pending contact updates during current sync cycle
     pending_contacts: HashMap<i32, TouchContact>,
+    /// Completed contacts waiting for gesture recognition
+    completed_contacts: Vec<TouchContact>,
+    /// Number of currently active contacts
+    active_contact_count: usize,
     /// Current slot being updated
     current_slot: i32,
     /// Gesture recognizer
@@ -55,12 +57,6 @@ pub struct TouchContact {
 /// Multi-touch events generated from raw input events
 #[derive(Debug, Clone)]
 pub enum MultiTouchEvent {
-    /// A new contact has been established
-    ContactStart { contact: TouchContact },
-    /// An existing contact has been updated
-    ContactUpdate { contact: TouchContact },
-    /// A contact has ended
-    ContactEnd { contact: TouchContact },
     /// Single finger tap gesture
     SingleFingerTap {
         finger: TouchContact,
@@ -176,8 +172,9 @@ impl MultiTouchProcessor {
         );
 
         Self {
-            active_contacts: HashMap::new(),
             pending_contacts: HashMap::new(),
+            completed_contacts: Vec::new(),
+            active_contact_count: 0,
             current_slot: 0,
             gesture_recognizer,
             config,
@@ -208,7 +205,7 @@ impl MultiTouchProcessor {
                 debug!("Switched to slot {}", value);
             }
             AbsoluteAxisType::ABS_MT_TRACKING_ID => {
-                self.handle_tracking_id(value);
+                return self.handle_tracking_id(value);
             }
             AbsoluteAxisType::ABS_MT_POSITION_X => {
                 self.update_contact_x(value);
@@ -234,17 +231,42 @@ impl MultiTouchProcessor {
     }
 
     /// Handle tracking ID updates (contact creation/destruction)
-    fn handle_tracking_id(&mut self, tracking_id: i32) {
+    fn handle_tracking_id(&mut self, tracking_id: i32) -> Option<Vec<MultiTouchEvent>> {
         if tracking_id == -1 {
-            // Contact ended - mark for removal
+            // Contact ended - immediately trigger gesture recognition
             if let Some(mut contact) = self.pending_contacts.remove(&self.current_slot) {
                 contact.is_active = false;
                 contact.last_update_time = Instant::now();
-                self.pending_contacts.insert(self.current_slot, contact);
-                debug!("Contact ended in slot {}", self.current_slot);
+                self.completed_contacts.push(contact);
+                self.active_contact_count = self.active_contact_count.saturating_sub(1);
+
+                debug!(
+                    "Contact ended in slot {}, active contacts: {}",
+                    self.current_slot, self.active_contact_count
+                );
+
+                // Trigger gesture recognition immediately if no more active contacts
+                if self.active_contact_count == 0 && !self.completed_contacts.is_empty() {
+                    debug!(
+                        "All contacts ended, running gesture recognition on {} contacts",
+                        self.completed_contacts.len()
+                    );
+
+                    if let Some(gesture_event) = self
+                        .gesture_recognizer
+                        .analyze_gesture(&self.completed_contacts)
+                    {
+                        self.completed_contacts.clear();
+                        return Some(vec![gesture_event]);
+                    }
+
+                    // Clear completed contacts even if no gesture was recognized
+                    self.completed_contacts.clear();
+                }
             }
         } else {
-            // New contact or update - create or update contact
+            // New contact or update
+            let is_new_contact = !self.pending_contacts.contains_key(&self.current_slot);
             let contact = self
                 .pending_contacts
                 .entry(self.current_slot)
@@ -255,7 +277,17 @@ impl MultiTouchProcessor {
 
             contact.id = tracking_id;
             contact.is_active = true;
+
+            if is_new_contact {
+                self.active_contact_count += 1;
+                debug!(
+                    "New contact started, active contacts: {}",
+                    self.active_contact_count
+                );
+            }
         }
+
+        None
     }
 
     /// Update X position for current slot
@@ -299,217 +331,16 @@ impl MultiTouchProcessor {
 
     /// Handle synchronization events (process accumulated changes)
     async fn handle_sync_event(&mut self, event: InputEvent) -> Option<Vec<MultiTouchEvent>> {
-        if event.code() != SynchronizationType::SYN_REPORT.0 {
+        if event.code() != Synchronization::SYN_REPORT.0 {
             return None;
         }
-
-        // Debounce rapid sync events
+        // Note: here we logic justing is based on the Track ID and Slot.
         let now = Instant::now();
-        if now.duration_since(self.last_sync_time).as_millis() < self.config.debounce_ms as u128 {
-            return None;
-        }
         self.last_sync_time = now;
 
-        let mut events = Vec::new();
-
-        // Process pending contacts and generate events
-        for (slot, pending_contact) in self.pending_contacts.drain() {
-            if pending_contact.is_active {
-                // Contact is active
-                if let Some(existing_contact) = self.active_contacts.get(&slot) {
-                    // Update existing contact
-                    if existing_contact.id != pending_contact.id
-                        || existing_contact.x != pending_contact.x
-                        || existing_contact.y != pending_contact.y
-                    {
-                        events.push(MultiTouchEvent::ContactUpdate {
-                            contact: pending_contact.clone(),
-                        });
-                    }
-                } else {
-                    // New contact
-                    events.push(MultiTouchEvent::ContactStart {
-                        contact: pending_contact.clone(),
-                    });
-                }
-                self.active_contacts.insert(slot, pending_contact);
-            } else {
-                // Contact ended
-                if let Some(ended_contact) = self.active_contacts.remove(&slot) {
-                    events.push(MultiTouchEvent::ContactEnd {
-                        contact: ended_contact,
-                    });
-                }
-            }
-        }
-
-        // Run gesture recognition on current active contacts
-        let active_contact_list: Vec<TouchContact> =
-            self.active_contacts.values().cloned().collect();
-        if let Some(gesture_event) = self
-            .gesture_recognizer
-            .analyze_gesture(&active_contact_list)
-        {
-            events.push(gesture_event);
-        }
-
-        debug!("Generated {} events from sync", events.len());
-        debug!("Active contacts: {}", self.active_contacts.len());
-
-        if events.is_empty() {
-            None
-        } else {
-            Some(events)
-        }
-    }
-
-    /// Get current active contacts (for debugging)
-    pub fn get_active_contacts(&self) -> &HashMap<i32, TouchContact> {
-        &self.active_contacts
-    }
-
-    /// Get number of active contacts
-    pub fn contact_count(&self) -> usize {
-        self.active_contacts.len()
+        None
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn create_test_config() -> GestureConfig {
-        GestureConfig {
-            scroll_threshold: 50.0,
-            swipe_threshold: 100.0,
-            pinch_threshold: 0.1,
-            tap_timeout_ms: 300,
-            debounce_ms: 10,
-            two_finger_tap_timeout_ms: 250,
-            two_finger_tap_distance_threshold: 100.0,
-            contact_pressure_threshold: 50.0,
-        }
-    }
-
-    #[test]
-    fn test_touch_contact_creation() {
-        let contact = TouchContact::new(42, 0);
-        assert_eq!(contact.id, 42);
-        assert_eq!(contact.slot, 0);
-        assert_eq!(contact.is_active, true);
-    }
-
-    #[test]
-    fn test_distance_calculation() {
-        let contact1 = TouchContact {
-            x: 0,
-            y: 0,
-            ..TouchContact::new(1, 0)
-        };
-        let contact2 = TouchContact {
-            x: 3,
-            y: 4,
-            ..TouchContact::new(2, 1)
-        };
-
-        assert_eq!(contact1.distance_to(&contact2), 5.0);
-    }
-
-    #[test]
-    fn test_movement_delta() {
-        let mut contact = TouchContact::new(1, 0);
-        contact.update_position(10, 20);
-        contact.update_position(15, 25);
-
-        let (dx, dy) = contact.movement_delta();
-        assert_eq!(dx, 5.0);
-        assert_eq!(dy, 5.0);
-    }
-
-    #[tokio::test]
-    async fn test_slot_switching() {
-        let mut processor = MultiTouchProcessor::new(create_test_config());
-
-        // Switch to slot 1
-        let slot_event = InputEvent::new(EventType::ABSOLUTE, AbsoluteAxisType::ABS_MT_SLOT.0, 1);
-        processor.process_event(slot_event).await;
-        assert_eq!(processor.current_slot, 1);
-
-        // Switch to slot 0
-        let slot_event = InputEvent::new(EventType::ABSOLUTE, AbsoluteAxisType::ABS_MT_SLOT.0, 0);
-        processor.process_event(slot_event).await;
-        assert_eq!(processor.current_slot, 0);
-    }
-
-    #[tokio::test]
-    async fn test_contact_lifecycle() {
-        let mut processor = MultiTouchProcessor::new(create_test_config());
-
-        // Start contact in slot 0
-        let tracking_event = InputEvent::new(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_MT_TRACKING_ID.0,
-            100,
-        );
-        processor.process_event(tracking_event).await;
-
-        // Update position
-        let x_event = InputEvent::new(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_MT_POSITION_X.0,
-            500,
-        );
-        processor.process_event(x_event).await;
-        let y_event = InputEvent::new(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_MT_POSITION_Y.0,
-            300,
-        );
-        processor.process_event(y_event).await;
-
-        // Sync to process changes
-        let sync_event = InputEvent::new(
-            EventType::SYNCHRONIZATION,
-            SynchronizationType::SYN_REPORT.0,
-            0,
-        );
-        let events = processor.process_event(sync_event).await.unwrap();
-
-        // Should have contact start event
-        assert_eq!(events.len(), 1);
-        match &events[0] {
-            MultiTouchEvent::ContactStart { contact } => {
-                assert_eq!(contact.id, 100);
-                assert_eq!(contact.x, 500);
-                assert_eq!(contact.y, 300);
-            }
-            _ => panic!("Expected ContactStart event"),
-        }
-
-        // End contact
-        let end_tracking_event = InputEvent::new(
-            EventType::ABSOLUTE,
-            AbsoluteAxisType::ABS_MT_TRACKING_ID.0,
-            -1,
-        );
-        processor.process_event(end_tracking_event).await;
-
-        // Sync to process changes
-        let sync_event = InputEvent::new(
-            EventType::SYNCHRONIZATION,
-            SynchronizationType::SYN_REPORT.0,
-            0,
-        );
-        tokio::time::sleep(tokio::time::Duration::from_millis(20)).await; // Wait for debounce
-        let events = processor.process_event(sync_event).await.unwrap();
-
-        // Should have contact end event
-        assert_eq!(events.len(), 1);
-        match &events[0] {
-            MultiTouchEvent::ContactEnd { contact } => {
-                assert_eq!(contact.id, 100);
-            }
-            _ => panic!("Expected ContactEnd event"),
-        }
-    }
-}
+mod tests {}

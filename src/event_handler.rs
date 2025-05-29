@@ -56,25 +56,6 @@ impl EventHandler {
                 info!("Pinch gesture detected: scale={:.2}", scale_factor);
                 self.execute_action(action).await?;
             }
-            MultiTouchEvent::ContactStart { contact } => {
-                debug!(
-                    "Contact started: id={}, pos=({}, {})",
-                    contact.id, contact.x, contact.y
-                );
-            }
-            MultiTouchEvent::ContactUpdate { contact } => {
-                debug!(
-                    "Contact updated: id={}, pos=({}, {})",
-                    contact.id, contact.x, contact.y
-                );
-            }
-            MultiTouchEvent::ContactEnd { contact } => {
-                debug!(
-                    "Contact ended: id={}, duration={}ms",
-                    contact.id,
-                    contact.contact_duration().as_millis()
-                );
-            }
         }
 
         Ok(())
