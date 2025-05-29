@@ -28,6 +28,7 @@ pub struct GestureConfig {
     pub two_finger_tap_timeout_ms: u64,
     pub two_finger_tap_distance_threshold: f64,
     pub contact_pressure_threshold: f64,
+    pub single_finger_tap_movement_threshold: f64,
 }
 
 impl Default for Config {
@@ -76,6 +77,7 @@ impl Default for Config {
                 two_finger_tap_timeout_ms: 250,
                 two_finger_tap_distance_threshold: 100.0,
                 contact_pressure_threshold: 50.0,
+                single_finger_tap_movement_threshold: 50.0,
             },
             actions,
         }

@@ -1,3 +1,5 @@
+use log::debug;
+
 use crate::multitouch::{MultiTouchEvent, TouchContact};
 use std::time::{Duration, Instant};
 
@@ -5,18 +7,35 @@ use std::time::{Duration, Instant};
 pub struct GestureRecognizer {
     swipe_threshold: f64,
     pinch_threshold: f64,
+    tap_timeout_ms: u64,
+    single_finger_tap_movement_threshold: f64,
+    two_finger_tap_timeout_ms: u64,
+    two_finger_tap_distance_threshold: f64,
 }
 
 impl GestureRecognizer {
-    pub fn new(swipe_threshold: f64, pinch_threshold: f64, _scroll_threshold: f64) -> Self {
+    pub fn new(
+        swipe_threshold: f64,
+        pinch_threshold: f64,
+        _scroll_threshold: f64,
+        tap_timeout_ms: u64,
+        single_finger_tap_movement_threshold: f64,
+        two_finger_tap_timeout_ms: u64,
+        two_finger_tap_distance_threshold: f64,
+    ) -> Self {
         Self {
             swipe_threshold,
             pinch_threshold,
+            tap_timeout_ms,
+            single_finger_tap_movement_threshold,
+            two_finger_tap_timeout_ms,
+            two_finger_tap_distance_threshold,
         }
     }
 
     /// Analyze contacts and detect gestures
     pub fn analyze_gesture(&mut self, contacts: &[TouchContact]) -> Option<MultiTouchEvent> {
+        debug!("Analyzing {} contacts for gestures", contacts.len());
         match contacts.len() {
             1 => self.analyze_single_finger(contacts),
             2 => self.analyze_two_finger(contacts),
@@ -27,9 +46,15 @@ impl GestureRecognizer {
     /// Detect single finger gestures (primarily taps)
     fn analyze_single_finger(&self, contacts: &[TouchContact]) -> Option<MultiTouchEvent> {
         let contact = &contacts[0];
+        debug!("Analyzing single finger contact: {:?}", contact);
 
         // Check for single tap - short duration and contact is no longer active
-        if !contact.is_active && contact.is_tap(300, 50.0) {
+        if !contact.is_active
+            && contact.is_tap(
+                self.tap_timeout_ms,
+                self.single_finger_tap_movement_threshold,
+            )
+        {
             return Some(MultiTouchEvent::SingleFingerTap {
                 finger: contact.clone(),
                 duration_ms: contact.contact_duration().as_millis() as u64,
@@ -86,7 +111,7 @@ impl GestureRecognizer {
         }
 
         // Short duration requirement
-        let max_tap_duration = Duration::from_millis(250);
+        let max_tap_duration = Duration::from_millis(self.two_finger_tap_timeout_ms);
         if contact1.contact_duration() > max_tap_duration
             || contact2.contact_duration() > max_tap_duration
         {
@@ -95,7 +120,7 @@ impl GestureRecognizer {
 
         // Close proximity requirement
         let distance = contact1.distance_to(contact2);
-        if distance > 100.0 {
+        if distance > self.two_finger_tap_distance_threshold {
             return false;
         }
 
@@ -150,7 +175,15 @@ mod tests {
 
     #[test]
     fn test_two_finger_tap_detection() {
-        let mut recognizer = GestureRecognizer::new(100.0, 0.1, 50.0);
+        let mut recognizer = GestureRecognizer::new(
+            100.0, // swipe_threshold
+            0.1,   // pinch_threshold
+            50.0,  // scroll_threshold
+            300,   // tap_timeout_ms
+            50.0,  // single_finger_tap_movement_threshold
+            250,   // two_finger_tap_timeout_ms
+            100.0, // two_finger_tap_distance_threshold
+        );
 
         // Create two close contacts with short duration
         let contact1 = TouchContact {

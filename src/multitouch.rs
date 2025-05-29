@@ -169,6 +169,10 @@ impl MultiTouchProcessor {
             config.swipe_threshold,
             config.pinch_threshold,
             config.scroll_threshold,
+            config.tap_timeout_ms,
+            config.single_finger_tap_movement_threshold,
+            config.two_finger_tap_timeout_ms,
+            config.two_finger_tap_distance_threshold,
         );
 
         Self {
@@ -184,7 +188,7 @@ impl MultiTouchProcessor {
 
     /// Process a single evdev input event according to MT Protocol Type B
     pub async fn process_event(&mut self, event: InputEvent) -> Option<Vec<MultiTouchEvent>> {
-        debug!("Processing event: {:?}", event);
+        trace!("Processing event: {:?}", event);
 
         match event.event_type() {
             EventType::ABSOLUTE => self.handle_absolute_event(event),
@@ -253,11 +257,13 @@ impl MultiTouchProcessor {
                     );
 
                     // Analyze gesture and return exactly one event
-                    let gesture_result = self.gesture_recognizer.analyze_gesture(&self.completed_contacts);
-                    
+                    let gesture_result = self
+                        .gesture_recognizer
+                        .analyze_gesture(&self.completed_contacts);
+
                     // Always clear completed contacts after gesture analysis to prevent duplicates
                     self.completed_contacts.clear();
-                    
+
                     // Return the gesture event if one was recognized
                     if let Some(gesture_event) = gesture_result {
                         debug!("Gesture recognized: {:?}", gesture_event);
@@ -357,6 +363,7 @@ mod tests {
             two_finger_tap_timeout_ms: 250,
             two_finger_tap_distance_threshold: 100.0,
             contact_pressure_threshold: 0.5,
+            single_finger_tap_movement_threshold: 50.0,
         }
     }
 
