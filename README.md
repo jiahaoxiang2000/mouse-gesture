@@ -46,7 +46,41 @@ On Ubuntu/Debian:
 sudo apt install xdotool
 ```
 
-## Building
+## Installation
+
+### Automated Installation (Recommended)
+
+The easiest way to install Magic Mouse Gesture Recognition is using the automated installation script:
+
+```bash
+git clone <repository-url>
+cd mouse-gesture
+
+# Run the installation script
+./scripts/install.sh
+```
+
+The installation script will:
+- Install Rust dependencies and build the project
+- Copy the binary to `/usr/local/bin`
+- Set up configuration in `~/.config/mouse-gesture/`
+- Create udev rules for device access
+- Add your user to the `input` group
+- Install and configure a systemd user service
+- Set up automatic startup
+
+After installation:
+```bash
+# Start the service immediately
+systemctl --user start mouse-gesture.service
+
+# Enable automatic startup on login
+systemctl --user enable mouse-gesture.service
+```
+
+### Manual Installation
+
+If you prefer to build and configure manually:
 
 1. Clone the repository:
 
@@ -59,6 +93,14 @@ cd mouse-gesture
 
 ```bash
 cargo build --release
+```
+
+### Uninstallation
+
+To completely remove the application:
+
+```bash
+./scripts/uninstall.sh
 ```
 
 ## Configuration
@@ -100,19 +142,26 @@ The application will create a default configuration file `config.json` on first 
 
 ### Basic Usage
 
+After installation, the service runs automatically. For manual testing or development:
+
 ```bash
-# Run with auto-detection
-sudo ./target/release/mouse-gesture-recognition
+# Check system dependencies and device detection
+mouse-gesture-recognition --check-deps
+
+# Run manually with auto-detection (for testing)
+mouse-gesture-recognition
 
 # Specify device path explicitly
-sudo ./target/release/mouse-gesture-recognition -d /dev/input/event26
+mouse-gesture-recognition -d /dev/input/event26
 
-# Enable verbose logging
-sudo ./target/release/mouse-gesture-recognition -v
+# Enable verbose logging for debugging
+mouse-gesture-recognition -v
 
-# Check system dependencies
-./target/release/mouse-gesture-recognition --check-deps
+# Run directly from build directory (before installation)
+sudo ./target/release/mouse-gesture-recognition --check-deps
 ```
+
+**Note**: After installation, no `sudo` is required as the application runs with user permissions and accesses devices through proper group membership.
 
 ### Finding Your Device
 
@@ -160,31 +209,74 @@ Then use `evtest` without `sudo` in that shell.
 
 ### Running as a Service
 
-To run the gesture recognition as a system service, create a systemd service file:
+The installation script automatically sets up a systemd user service. After installation:
 
-```ini
-[Unit]
-Description=Magic Mouse Gesture Recognition
-After=graphical-session.target
+```bash
+# Enable the service to start automatically
+systemctl --user enable mouse-gesture.service
 
-[Service]
-Type=simple
-ExecStart=/path/to/mouse-gesture-recognition -d /dev/input/event26
-Restart=always
-User=root
-Environment=DISPLAY=:0
+# Start the service
+systemctl --user start mouse-gesture.service
 
-[Install]
-WantedBy=graphical-session.target
+# Check service status
+systemctl --user status mouse-gesture.service
+
+# View service logs
+journalctl --user -u mouse-gesture.service -f
+```
+
+The service is configured to:
+- Start automatically when you log in
+- Restart automatically if it crashes
+- Run with your user permissions (no root required)
+- Access the configuration in `~/.config/mouse-gesture/config.json`
+
+You can also use the provided service management script:
+
+```bash
+# Service management
+./scripts/service.sh start      # Start the service
+./scripts/service.sh stop       # Stop the service
+./scripts/service.sh restart    # Restart the service
+./scripts/service.sh status     # Check service status
+./scripts/service.sh enable     # Enable automatic startup
+./scripts/service.sh disable    # Disable automatic startup
+
+# Monitoring and configuration
+./scripts/service.sh logs       # View service logs
+./scripts/service.sh edit-config # Edit configuration file
+```
+
+### Additional Management Scripts
+
+The project includes several utility scripts:
+
+```bash
+# Development helpers
+./scripts/dev.sh build          # Build project
+./scripts/dev.sh run            # Run directly (not as service)
+./scripts/dev.sh test           # Run tests
+./scripts/dev.sh clean          # Clean build artifacts
+
+# Build system
+make install                    # Same as ./scripts/install.sh
+make uninstall                  # Same as ./scripts/uninstall.sh
+make build                      # Build project
+make run                        # Run project
 ```
 
 ## Permissions
 
-The application requires root privileges to access input devices. For security, consider:
+The application runs with user privileges and accesses input devices through proper group membership. The installation script:
 
-1. Adding your user to the `input` group
-2. Setting appropriate udev rules for device access
-3. Using capabilities instead of full root access
+1. Adds your user to the `input` group for device access
+2. Sets up udev rules for Magic Mouse devices
+3. Configures appropriate file permissions
+
+No root privileges are required for normal operation. The service runs as your user account with access to:
+- Input devices (via `input` group membership)
+- Your desktop environment for executing actions
+- User configuration directory (`~/.config/mouse-gesture/`)
 
 ## Troubleshooting
 
