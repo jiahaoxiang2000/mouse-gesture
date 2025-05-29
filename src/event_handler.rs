@@ -79,18 +79,19 @@ impl EventHandler {
     async fn simulate_click(&self, button: u8) -> Result<()> {
         debug!("Simulating mouse click: button {}", button);
 
-        let output = Command::new("xdotool")
-            .args(&["click", &button.to_string()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .context("Failed to execute xdotool click")?;
+        // // here we close the mouse click function
+        // let output = Command::new("xdotool")
+        //     .args(&["click", &button.to_string()])
+        //     .stdout(Stdio::null())
+        //     .stderr(Stdio::piped())
+        //     .output()
+        //     .await
+        //     .context("Failed to execute xdotool click")?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("xdotool click failed: {}", stderr);
-        }
+        // if !output.status.success() {
+        //     let stderr = String::from_utf8_lossy(&output.stderr);
+        //     warn!("xdotool click failed: {}", stderr);
+        // }
 
         Ok(())
     }
