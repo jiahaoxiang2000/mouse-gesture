@@ -133,11 +133,6 @@ impl GestureRecognizer {
 
     /// Detect swipe gestures based on movement delta
     fn detect_swipe(&self, contact1: &TouchContact, contact2: &TouchContact) -> Option<(f64, f64)> {
-        // Only detect swipes on inactive contacts (completed gestures)
-        if contact1.is_active || contact2.is_active {
-            return None;
-        }
-
         let (dx1, dy1) = contact1.movement_delta();
         let (dx2, dy2) = contact2.movement_delta();
 

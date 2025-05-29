@@ -6,12 +6,12 @@
   },
   "gesture": {
     "scroll_threshold": 50.0,
-    "swipe_threshold": 100.0,
+    "swipe_threshold": 700.0,
     "pinch_threshold": 0.1,
     "tap_timeout_ms": 300,
     "debounce_ms": 100,
-    "two_finger_tap_timeout_ms": 250,
-    "two_finger_tap_distance_threshold": 1200.0,
+    "two_finger_tap_timeout_ms": 100,
+    "two_finger_tap_distance_threshold": 600.0,
     "contact_pressure_threshold": 50.0,
     "single_finger_tap_movement_threshold": 50.0
   },
