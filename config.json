@@ -8,7 +8,7 @@
     "scroll_threshold": 50.0,
     "swipe_threshold": 300.0,
     "pinch_threshold": 0.7,
-    "tap_timeout_ms": 300,
+    "tap_timeout_ms": 150,
     "debounce_ms": 100,
     "two_finger_tap_timeout_ms": 250,
     "two_finger_tap_distance_threshold": 800.0,
@@ -22,7 +22,7 @@
     "swipe_left_2finger": "hyprctl dispatch sendshortcut ALT, Right, ",
     "swipe_right_2finger": "hyprctl dispatch sendshortcut ALT, Left, ",
     "scroll_vertical": "scroll_vertical",
-    "tap_1finger": "click",
+    "tap_1finger": "hyprctl dispatch sendshortcut , mouse:272, ",
     "tap_2finger": "hyprctl -q keyword cursor:zoom_factor 1",
     "pinch_in": "hyprctl -q keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | awk '/^float.*/ {print $2 * 0.8}')",
     "pinch_out": "hyprctl -q keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | awk '/^float.*/ {print $2 * 1.2}')"

@@ -130,7 +130,7 @@ show_logs() {
 
 # Edit configuration
 edit_config() {
-    CONFIG_FILE="/etc/mouse-gesture/config.json"
+    CONFIG_FILE="$HOME/.config/mouse-gesture/config.json"
     
     if [[ ! -f "$CONFIG_FILE" ]]; then
         print_error "Configuration file not found: $CONFIG_FILE"
@@ -141,7 +141,7 @@ edit_config() {
     
     # Use preferred editor or fall back to nano
     EDITOR=${EDITOR:-nano}
-    sudo "$EDITOR" "$CONFIG_FILE"
+    "$EDITOR" "$CONFIG_FILE"
     
     print_status "Configuration edited. Restart the service to apply changes:"
     echo "  $0 restart"
