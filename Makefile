@@ -1,7 +1,7 @@
 # Magic Mouse Gesture Recognition - Makefile
 # Provides easy commands for building, installing, and managing the application
 
-.PHONY: help build test clean install uninstall dev-install dev-uninstall service-start service-stop service-status check format
+.PHONY: help build test clean install uninstall dev-install dev-uninstall service-start service-stop service-status check format update update-config
 
 # Default target
 help:
@@ -34,6 +34,9 @@ help:
 	@echo "  run         - Build and run with verbose output"
 	@echo "  debug       - Run with debug logging"
 	@echo ""
+	@echo "Updates:"
+	@echo "  update       - Rebuild and reinstall the project"
+	@echo "  update-config- Update the configuration file"
 
 # Build targets
 build:
@@ -114,3 +117,9 @@ info:
 	@echo ""
 	@echo "Magic Mouse devices:"
 	@ls /dev/input/event* | xargs -I {} sh -c 'echo -n "{}: "; cat /sys/class/input/$$(basename {})/device/name 2>/dev/null || echo "unknown"' | grep -i mouse || echo "No Magic Mouse devices found"
+
+update:
+	./scripts/update.sh
+
+update-config:
+	./scripts/update-config.sh
