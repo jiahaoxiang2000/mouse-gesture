@@ -6,6 +6,34 @@ use std::time::{Duration, Instant};
 use crate::config::GestureConfig;
 use crate::gesture::GestureRecognizer;
 
+// Magic Mouse 2 USB-C 2024 hardware specifications
+// Based on evtest output showing resolution values:
+// Event code 53 (ABS_MT_POSITION_X): Resolution 26 units/mm
+// Event code 54 (ABS_MT_POSITION_Y): Resolution 70 units/mm
+// This allows us to convert raw touchpad coordinate units to real-world millimeters
+const MAGIC_MOUSE_X_RESOLUTION: f64 = 26.0; // units per mm
+const MAGIC_MOUSE_Y_RESOLUTION: f64 = 70.0; // units per mm
+
+/// Convert Magic Mouse X coordinate units to millimeters
+fn units_to_mm_x(units: i32) -> f64 {
+    units as f64 / MAGIC_MOUSE_X_RESOLUTION
+}
+
+/// Convert Magic Mouse Y coordinate units to millimeters  
+fn units_to_mm_y(units: i32) -> f64 {
+    units as f64 / MAGIC_MOUSE_Y_RESOLUTION
+}
+
+/// Convert millimeters to Magic Mouse X coordinate units
+fn mm_to_units_x(mm: f64) -> i32 {
+    (mm * MAGIC_MOUSE_X_RESOLUTION) as i32
+}
+
+/// Convert millimeters to Magic Mouse Y coordinate units
+fn mm_to_units_y(mm: f64) -> i32 {
+    (mm * MAGIC_MOUSE_Y_RESOLUTION) as i32
+}
+
 /// Multi-touch processor that follows the Linux Multi-Touch Protocol Type B
 ///
 /// This processor manages touch contacts using slots and tracking IDs as described in:
@@ -134,19 +162,21 @@ impl TouchContact {
             .duration_since(self.first_contact_time)
     }
 
-    /// Calculate distance to another contact
+    /// Calculate distance to another contact in millimeters
     pub fn distance_to(&self, other: &TouchContact) -> f64 {
-        let dx = (self.x - other.x) as f64;
-        let dy = (self.y - other.y) as f64;
-        (dx * dx + dy * dy).sqrt()
+        let dx_mm = units_to_mm_x(self.x) - units_to_mm_x(other.x);
+        let dy_mm = units_to_mm_y(self.y) - units_to_mm_y(other.y);
+        (dx_mm * dx_mm + dy_mm * dy_mm).sqrt()
     }
 
-    /// Get movement delta from start to current position
+    /// Get movement delta from start to current position in millimeters
     pub fn movement_delta(&self) -> (f64, f64) {
         // The first entry is always (0,0) from initialization, so we want the third entry if it exists
         if self.position_history.len() >= 3 {
             if let Some((start_x, start_y, _)) = self.position_history.get(2) {
-                ((self.x - start_x) as f64, (self.y - start_y) as f64)
+                let dx_mm = units_to_mm_x(self.x) - units_to_mm_x(*start_x);
+                let dy_mm = units_to_mm_y(self.y) - units_to_mm_y(*start_y);
+                (dx_mm, dy_mm)
             } else {
                 (0.0, 0.0)
             }
@@ -361,15 +391,15 @@ mod tests {
 
     fn create_test_config() -> GestureConfig {
         GestureConfig {
-            scroll_threshold: 50.0,
-            swipe_threshold: 100.0,
+            scroll_threshold: 2.0,      // 2mm
+            swipe_threshold: 12.0,      // 12mm
             pinch_threshold: 0.1,
             tap_timeout_ms: 300,
             debounce_ms: 10,
             two_finger_tap_timeout_ms: 250,
-            two_finger_tap_distance_threshold: 100.0,
+            two_finger_tap_distance_threshold: 30.0,  // 30mm
             contact_pressure_threshold: 0.5,
-            single_finger_tap_movement_threshold: 50.0,
+            single_finger_tap_movement_threshold: 2.0,  // 2mm
         }
     }
 

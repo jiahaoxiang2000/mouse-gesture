@@ -117,8 +117,8 @@ The application will create a default configuration file `config.json` on first 
     "name_pattern": "Magic Mouse"
   },
   "gesture": {
-    "scroll_threshold": 50.0,
-    "swipe_threshold": 100.0,
+    "scroll_threshold": 2.0,
+    "swipe_threshold": 12.0,
     "pinch_threshold": 0.1,
     "tap_timeout_ms": 300,
     "debounce_ms": 100

@@ -5,15 +5,15 @@
     "name_pattern": "Magic Mouse"
   },
   "gesture": {
-    "scroll_threshold": 50.0,
-    "swipe_threshold": 300.0,
-    "pinch_threshold": 0.7,
+    "scroll_threshold": 2.0,
+    "swipe_threshold": 10.0,
+    "pinch_threshold": 0.5,
     "tap_timeout_ms": 150,
     "debounce_ms": 100,
-    "two_finger_tap_timeout_ms": 250,
-    "two_finger_tap_distance_threshold": 800.0,
+    "two_finger_tap_timeout_ms": 150,
+    "two_finger_tap_distance_threshold": 30.0,
     "contact_pressure_threshold": 50.0,
-    "single_finger_tap_movement_threshold": 50.0
+    "single_finger_tap_movement_threshold": 2.0
   },
   "actions": {
     "scroll_horizontal": "scroll_horizontal",

@@ -45,7 +45,7 @@ A two-finger tap is detected when all of the following conditions are met:
 
 1. **Exactly 2 active contacts**: Must have precisely two fingers touching
 2. **Short duration**: Both contacts must be active for less than `two_finger_tap_timeout_ms` (default: 250ms)
-3. **Close proximity**: Distance between contacts < `two_finger_tap_distance_threshold` (default: 100.0 units)
+3. **Close proximity**: Distance between contacts < `two_finger_tap_distance_threshold` (default: 30.0mm)
 4. **Sufficient pressure**: Both contacts must exceed `contact_pressure_threshold` (default: 50.0)
 5. **Simultaneous contact**: Both fingers should start contact within 100ms of each other
 
@@ -76,7 +76,7 @@ A two-finger tap is detected when all of the following conditions are met:
 {
   "gesture": {
     "two_finger_tap_timeout_ms": 250,        // Max tap duration
-    "two_finger_tap_distance_threshold": 100.0,  // Max distance between fingers
+    "two_finger_tap_distance_threshold": 30.0,  // Max distance between fingers (mm)
     "contact_pressure_threshold": 50.0       // Min pressure for valid contact
   }
 }
@@ -134,7 +134,7 @@ And the configured action will be executed (default: right-click).
 
 1. **Light Touch**: Place two fingers gently on the Magic Mouse surface
 2. **Quick Tap**: Tap briefly (< 250ms) and lift both fingers
-3. **Close Together**: Keep fingers within ~4mm of each other
+3. **Close Together**: Keep fingers within ~30mm of each other
 4. **Sufficient Pressure**: Press firmly enough to register contact
 
 The gesture will be recognized and execute the configured action (`tap_2finger` by default maps to right-click).

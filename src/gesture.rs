@@ -1,7 +1,22 @@
-use log::debug;
+use log::{debug, trace};
 
 use crate::multitouch::{MultiTouchEvent, TouchContact};
 use std::time::{Duration, Instant};
+
+// Magic Mouse 2 USB-C 2024 hardware specifications
+// Based on evtest output showing resolution values
+const MAGIC_MOUSE_X_RESOLUTION: f64 = 26.0; // units per mm
+const MAGIC_MOUSE_Y_RESOLUTION: f64 = 70.0; // units per mm
+
+/// Convert Magic Mouse X coordinate units to millimeters
+fn units_to_mm_x(units: i32) -> f64 {
+    units as f64 / MAGIC_MOUSE_X_RESOLUTION
+}
+
+/// Convert Magic Mouse Y coordinate units to millimeters
+fn units_to_mm_y(units: i32) -> f64 {
+    units as f64 / MAGIC_MOUSE_Y_RESOLUTION
+}
 
 /// Gesture recognizer focused on multi-touch tap and swipe detection
 pub struct GestureRecognizer {
@@ -70,6 +85,10 @@ impl GestureRecognizer {
         // Check for two-finger tap first (highest priority)
         if self.is_two_finger_tap(contact1, contact2) {
             let max_duration = contact1.contact_duration().max(contact2.contact_duration());
+            trace!(
+                "Detected two-finger tap: duration_ms = {}",
+                max_duration.as_millis()
+            );
             return Some(MultiTouchEvent::TwoFingerTap {
                 finger1: contact1.clone(),
                 finger2: contact2.clone(),
@@ -79,6 +98,11 @@ impl GestureRecognizer {
 
         // Check for swipe gesture
         if let Some((delta_x, delta_y)) = self.detect_swipe(contact1, contact2) {
+            trace!(
+                "Detected two-finger swipe: delta_x = {}, delta_y = {}",
+                delta_x,
+                delta_y
+            );
             return Some(MultiTouchEvent::TwoFingerSwipe {
                 finger1: contact1.clone(),
                 finger2: contact2.clone(),
@@ -89,8 +113,14 @@ impl GestureRecognizer {
 
         // Check for pinch gesture
         if let Some(scale_factor) = self.detect_pinch(contact1, contact2) {
-            let center_x = (contact1.x + contact2.x) as f64 / 2.0;
-            let center_y = (contact1.y + contact2.y) as f64 / 2.0;
+            let center_x = (units_to_mm_x(contact1.x) + units_to_mm_x(contact2.x)) / 2.0;
+            let center_y = (units_to_mm_y(contact1.y) + units_to_mm_y(contact2.y)) / 2.0;
+            trace!(
+                "Detected pinch gesture: center_x = {}, center_y = {}, scale_factor = {}",
+                center_x,
+                center_y,
+                scale_factor
+            );
             return Some(MultiTouchEvent::Pinch {
                 center_x,
                 center_y,
@@ -170,16 +200,17 @@ impl GestureRecognizer {
         };
 
         let initial_distance = {
-            let dx = (initial_pos1.0 - initial_pos2.0) as f64;
-            let dy = (initial_pos1.1 - initial_pos2.1) as f64;
-            (dx * dx + dy * dy).sqrt()
+            let dx_mm = units_to_mm_x(initial_pos1.0) - units_to_mm_x(initial_pos2.0);
+            let dy_mm = units_to_mm_y(initial_pos1.1) - units_to_mm_y(initial_pos2.1);
+            (dx_mm * dx_mm + dy_mm * dy_mm).sqrt()
         };
 
         // Calculate current distance
         let current_distance = contact1.distance_to(contact2);
 
-        // Avoid division by zero
-        if initial_distance < 1.0 {
+        // Avoid division by zero and ensure minimum meaningful distance
+        if initial_distance < 0.5 {
+            // 0.5mm minimum distance
             return None;
         }
 
@@ -206,13 +237,13 @@ mod tests {
     #[test]
     fn test_two_finger_tap_detection() {
         let mut recognizer = GestureRecognizer::new(
-            100.0, // swipe_threshold
-            0.1,   // pinch_threshold
-            50.0,  // scroll_threshold
-            300,   // tap_timeout_ms
-            50.0,  // single_finger_tap_movement_threshold
-            250,   // two_finger_tap_timeout_ms
-            100.0, // two_finger_tap_distance_threshold
+            12.0, // swipe_threshold (mm)
+            0.1,  // pinch_threshold
+            2.0,  // scroll_threshold (mm)
+            300,  // tap_timeout_ms
+            2.0,  // single_finger_tap_movement_threshold (mm)
+            250,  // two_finger_tap_timeout_ms
+            30.0, // two_finger_tap_distance_threshold (mm)
         );
 
         // Create two close contacts with short duration
@@ -255,17 +286,24 @@ mod tests {
 
     #[test]
     fn test_pinch_detection() {
+        // Initialize debug logging for the test
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
+
         let mut recognizer = GestureRecognizer::new(
-            100.0, // swipe_threshold
-            0.2,   // pinch_threshold (20% change)
-            50.0,  // scroll_threshold
-            300,   // tap_timeout_ms
-            50.0,  // single_finger_tap_movement_threshold
-            250,   // two_finger_tap_timeout_ms
-            100.0, // two_finger_tap_distance_threshold
+            12.0, // swipe_threshold (mm)
+            0.2,  // pinch_threshold (20% change)
+            2.0,  // scroll_threshold (mm)
+            300,  // tap_timeout_ms
+            2.0,  // single_finger_tap_movement_threshold (mm)
+            250,  // two_finger_tap_timeout_ms
+            30.0, // two_finger_tap_distance_threshold (mm)
         );
 
         let now = Instant::now();
+        let time1 = now;
+        let time2 = now + Duration::from_millis(250);
+        let time3 = now + Duration::from_millis(500);
+        let time4 = now + Duration::from_millis(750);
 
         // Create two contacts that start close and move apart (pinch out)
         let contact1 = TouchContact {
@@ -276,14 +314,14 @@ mod tests {
             touch_major: 100,
             touch_minor: 100,
             orientation: 0,
-            first_contact_time: now,
-            last_update_time: now,
+            first_contact_time: time1,
+            last_update_time: time4,
             is_active: true,
             position_history: vec![
-                (0, 0, now),     // Initial (0,0) position
-                (100, 100, now), // First real position
-                (110, 110, now), // Early position
-                (150, 150, now), // Final position (moved apart)
+                (0, 0, time1),     // Initial (0,0) position
+                (100, 100, time2), // First real position
+                (110, 110, time3), // Early position
+                (150, 150, time4), // Final position (moved apart)
             ],
         };
 
@@ -295,18 +333,18 @@ mod tests {
             touch_major: 90,
             touch_minor: 90,
             orientation: 0,
-            first_contact_time: now,
-            last_update_time: now,
+            first_contact_time: time1,
+            last_update_time: time4,
             is_active: true,
             position_history: vec![
-                (0, 0, now),     // Initial (0,0) position
-                (100, 100, now), // First real position (same as contact1)
-                (90, 90, now),   // Early position
-                (50, 50, now),   // Final position (moved apart)
+                (0, 0, time1),     // Initial (0,0) position
+                (100, 100, time2), // First real position (same as contact1)
+                (90, 90, time3),   // Early position
+                (50, 50, time4),   // Final position (moved apart)
             ],
         };
 
-        let contacts = vec![contact1, contact2];
+        let contacts = vec![contact1.clone(), contact2.clone()];
 
         if let Some(MultiTouchEvent::Pinch { scale_factor, .. }) =
             recognizer.analyze_gesture(&contacts)
@@ -318,7 +356,18 @@ mod tests {
                 scale_factor
             );
         } else {
-            panic!("Expected pinch detection");
+            // Debug: let's see what the actual distances are
+            let initial_pos1 = contact1.position_history[2];
+            let initial_pos2 = contact2.position_history[2];
+            let initial_dx = units_to_mm_x(initial_pos1.0) - units_to_mm_x(initial_pos2.0);
+            let initial_dy = units_to_mm_y(initial_pos1.1) - units_to_mm_y(initial_pos2.1);
+            let initial_distance = (initial_dx * initial_dx + initial_dy * initial_dy).sqrt();
+            let current_distance = contact1.distance_to(&contact2);
+            let scale_factor = current_distance / initial_distance;
+            let scale_change = (scale_factor - 1.0).abs();
+
+            panic!("Expected pinch detection. Initial distance: {:.3}mm, Current distance: {:.3}mm, Scale factor: {:.3}, Scale change: {:.3}, Threshold: {:.3}", 
+                   initial_distance, current_distance, scale_factor, scale_change, recognizer.pinch_threshold);
         }
     }
 }
