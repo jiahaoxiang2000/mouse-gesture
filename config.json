@@ -17,14 +17,14 @@
   },
   "actions": {
     "scroll_horizontal": "scroll_horizontal",
-    "swipe_up_2finger": "hyprctl dispatch sendshortcut CTRL, t, ",
-    "swipe_down_2finger": "hyprctl dispatch sendshortcut CTRL, w, ",
-    "swipe_left_2finger": "hyprctl dispatch sendshortcut ALT, Right, ",
-    "swipe_right_2finger": "hyprctl dispatch sendshortcut ALT, Left, ",
+    "swipe_up_2finger": "ydotool key 29:1 20:1 20:0 29:0",
+    "swipe_down_2finger": "ydotool key 29:1 17:1 17:0 29:0",
+    "swipe_left_2finger": "ydotool key 56:1 106:1 106:0 56:0",
+    "swipe_right_2finger": "ydotool key 56:1 105:1 105:0 56:0",
     "scroll_vertical": "scroll_vertical",
-    "tap_1finger": "hyprctl dispatch sendshortcut , mouse:272, ",
-    "tap_2finger": "hyprctl -q keyword cursor:zoom_factor 1",
-    "pinch_in": "hyprctl -q keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | awk '/^float.*/ {print $2 * 0.8}')",
-    "pinch_out": "hyprctl -q keyword cursor:zoom_factor $(hyprctl getoption cursor:zoom_factor | awk '/^float.*/ {print $2 * 1.2}')"
+    "tap_1finger": "ydotool click 0xC0",
+    "tap_2finger": "",
+    "pinch_in": "",
+    "pinch_out": ""
   }
 }
